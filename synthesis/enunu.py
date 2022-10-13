@@ -71,7 +71,9 @@ if __name__ == "__main__":
 
     if args["mode"].lower() == "legacy":
         if len(unknown_args) > 0:
-            main(*(unknown_args[:2]))
+            main(unknown_args[0], None)
+        elif len(unknown_args) > 1:
+            main(unknown_args[0], unknown_args[1])
         elif len(argv) == 1:
             main(input("Input file path of TMP(plugin)\n>>> ").strip('"'), None)
         else:
