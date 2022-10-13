@@ -13,10 +13,7 @@ from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
 from nnmnkwii.postfilters import merlin_post_filter
 from nnsvs.dsp import bandpass_filter
-from nnsvs.gen import (
-    gen_spsvs_static_features,
-    gen_world_params
-)
+from nnsvs.gen import gen_spsvs_static_features, gen_world_params
 from nnsvs.logger import getLogger
 from nnsvs.multistream import get_static_stream_sizes
 from nnsvs.pitch import lowpass_filter
@@ -39,10 +36,10 @@ def estimate_bit_depth(wav: np.ndarray) -> str:
     max_gain = np.nanmax(np.abs(wav))
     # 学習データのビット深度を推定(8388608=2^24)
     if max_gain > 8388608:
-        return 'int32'
+        return "int32"
     if max_gain > 8:
-        return 'int16'
-    return 'float'
+        return "int16"
+    return "float"
 
 
 def generate_wav_file(config: DictConfig, wav, out_wav_path):
@@ -54,16 +51,16 @@ def generate_wav_file(config: DictConfig, wav, out_wav_path):
     # print(training_data_bit_depth)
 
     # 16bitで学習したモデルの時
-    if training_data_bit_depth == 'int16':
+    if training_data_bit_depth == "int16":
         wav = wav / 32767
     # 32bitで学習したモデルの時
-    elif training_data_bit_depth == 'int32':
+    elif training_data_bit_depth == "int32":
         wav = wav / 2147483647
-    elif training_data_bit_depth == 'float':
+    elif training_data_bit_depth == "float":
         pass
     # なぜか16bitでも32bitでもないとき
     else:
-        raise ValueError('WAVのbit深度がよくわかりませんでした。')
+        raise ValueError("WAVのbit深度がよくわかりませんでした。")
 
     # 音量ノーマライズする場合
     if config.gain_normalize:
@@ -139,12 +136,18 @@ def generate_wav_file(config: DictConfig, wav, out_wav_path):
 #     generate_wav_file(config, generated_waveform, path_wav)
 
 
-def acoustic2world(config: DictConfig, path_timing, path_acoustic,
-                   path_f0, path_spcetrogram, path_aperiodicity,
-                   trajectory_smoothing=True,
-                   trajectory_smoothing_cutoff=50,
-                   vibrato_scale=1.0,
-                   vuv_threshold=0.1):
+def acoustic2world(
+    config: DictConfig,
+    path_timing,
+    path_acoustic,
+    path_f0,
+    path_spcetrogram,
+    path_aperiodicity,
+    trajectory_smoothing=True,
+    trajectory_smoothing_cutoff=50,
+    vibrato_scale=1.0,
+    vuv_threshold=0.1,
+):
     """
     Acousticの行列のCSVを読んで、WAVファイルとして出力する。
     """
@@ -157,7 +160,7 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
     duration_modified_labels = hts.load(path_timing).round_()
 
     # CUDAが使えるかどうか
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 各種設定を読み込む
     acoustic_model_config = OmegaConf.load(to_absolute_path(config["acoustic"].model_yaml))
@@ -171,9 +174,7 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
     # --------------------------------------
 
     # hedファイルを辞書として読み取る。
-    binary_dict, numeric_dict = hts.load_question_set(
-        question_path, append_hat_for_LL=False
-    )
+    binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
 
     # pitch indices in the input features
     pitch_idx = len(binary_dict) + 1
@@ -181,9 +182,7 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
 
     # pylint: disable=no-member
     # Acousticの数値を読み取る
-    acoustic_features = np.loadtxt(
-        path_acoustic, delimiter=',', dtype=np.float64
-    )
+    acoustic_features = np.loadtxt(path_acoustic, delimiter=",", dtype=np.float64)
 
     # postfilter setting
     try:
@@ -194,7 +193,7 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
     except Exception as e:
         print(e)
         print(f"There is no post_filter_type setting so merlin is used.")
-        
+
     try:
         post_filter_type = config.acoustic.post_filter_type
     except Exception as e:
@@ -208,12 +207,12 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
 
     if "post_filter" in config.acoustic.keys():
         print("post_filter is deprecated. Use post_filter_type instead.")
-    
+
     try:
         postfilter_out_scaler = joblib.load(config["postfilter"].out_scaler_path)
         # Apply GV post-filtering
         if post_filter_type in ["nnsvs", "gv"]:
-            print("Apply GV post-filtering")        
+            print("Apply GV post-filtering")
             static_stream_sizes = get_static_stream_sizes(
                 acoustic_model_config.stream_sizes,
                 acoustic_model_config.has_dynamic_features,
@@ -239,17 +238,11 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
                 postfilter_model_config = OmegaConf.load(to_absolute_path(config["postfilter"].model_yaml))
                 postfilter_model = hydra.utils.instantiate(postfilter_model_config.netG).to(device)
 
-                print("Apply mgc_postfilter")        
-                in_feats = (
-                    torch.from_numpy(acoustic_features).float().unsqueeze(0)                
-                )
+                print("Apply mgc_postfilter")
+                in_feats = torch.from_numpy(acoustic_features).float().unsqueeze(0)
                 in_feats = postfilter_out_scaler.transform(in_feats).float().to(device)
                 out_feats = postfilter_model.inference(in_feats, [in_feats.shape[1]])
-                acoustic_features = (
-                    postfilter_out_scaler.inverse_transform(out_feats.detach().cpu())
-                    .squeeze(0)
-                    .numpy()
-                )
+                acoustic_features = postfilter_out_scaler.inverse_transform(out_feats.detach().cpu()).squeeze(0).numpy()
     except Exception as e:
         print(e)
         print("Unable to use NNSVS/GV postfilter")
@@ -268,62 +261,39 @@ def acoustic2world(config: DictConfig, path_timing, path_acoustic,
         config.frame_period,
         config.acoustic.relative_f0,
         vibrato_scale,
-        vuv_threshold
+        vuv_threshold,
     )
 
     # NOTE: spectral enhancement based on the Merlin's post-filter implementation
     if post_filter_type == "merlin":
         alpha = pysptk.util.mcepalpha(config.sample_rate)
         mgc = merlin_post_filter(mgc, alpha)
-    
+
     # Remove high-frequency components of mgc/bap
     # NOTE: It seems to be effective to suppress artifacts of GAN-based post-filtering
     if trajectory_smoothing:
         modfs = int(1 / 0.005)
         for d in range(mgc.shape[1]):
-            mgc[:, d] = lowpass_filter(
-                mgc[:, d], modfs, cutoff=trajectory_smoothing_cutoff
-            )
+            mgc[:, d] = lowpass_filter(mgc[:, d], modfs, cutoff=trajectory_smoothing_cutoff)
         for d in range(bap.shape[1]):
-            bap[:, d] = lowpass_filter(
-                bap[:, d], modfs, cutoff=trajectory_smoothing_cutoff
-            )
+            bap[:, d] = lowpass_filter(bap[:, d], modfs, cutoff=trajectory_smoothing_cutoff)
 
     # Generate WORLD parameters
-    f0, spectrogram, aperiodicity = gen_world_params(
-        mgc, lf0, vuv, bap, config.sample_rate, vuv_threshold=vuv_threshold
-    )
-            
+    f0, spectrogram, aperiodicity = gen_world_params(mgc, lf0, vuv, bap, config.sample_rate, vuv_threshold=vuv_threshold)
+
     # csvファイルとしてf0の行列を出力
-    for path, array in (
-        (path_f0, f0),
-        (path_spcetrogram, spectrogram),
-        (path_aperiodicity, aperiodicity)
-    ):
-        np.savetxt(
-            path,
-            array,
-            fmt='%.16f',
-            delimiter=','
-        )
+    for path, array in ((path_f0, f0), (path_spcetrogram, spectrogram), (path_aperiodicity, aperiodicity)):
+        np.savetxt(path, array, fmt="%.16f", delimiter=",")
 
 
 def world2wav(config: DictConfig, path_f0, path_spectrogram, path_aperiodicity, path_wav):
     """WORLD用のパラメータからWAVファイルを生成する。"""
-    f0 = np.loadtxt(
-        path_f0, delimiter=',', dtype=np.float64
-    )
-    spectrogram = np.loadtxt(
-        path_spectrogram, delimiter=',', dtype=np.float64
-    )
-    aperiodicity = np.loadtxt(
-        path_aperiodicity, delimiter=',', dtype=np.float64
-    )
-    wav = pyworld.synthesize(
-        f0, spectrogram, aperiodicity, config.sample_rate, config.frame_period
-    )
+    f0 = np.loadtxt(path_f0, delimiter=",", dtype=np.float64)
+    spectrogram = np.loadtxt(path_spectrogram, delimiter=",", dtype=np.float64)
+    aperiodicity = np.loadtxt(path_aperiodicity, delimiter=",", dtype=np.float64)
+    wav = pyworld.synthesize(f0, spectrogram, aperiodicity, config.sample_rate, config.frame_period)
 
     wav = bandpass_filter(wav, config.sample_rate)
-    
+
     # 音量を調整して 32bit float でファイル出力
     generate_wav_file(config, wav, path_wav)

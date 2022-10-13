@@ -33,9 +33,9 @@ def _score2timelag(config: DictConfig, labels):
     logger = getLogger(config.verbose)
     logger.info(OmegaConf.to_yaml(config))
 
-    typ = 'timelag'
+    typ = "timelag"
     # CUDAが使えるかどうか
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # maybe_set_checkpoints_(config) のかわり
     set_checkpoint(config, typ)
@@ -45,10 +45,8 @@ def _score2timelag(config: DictConfig, labels):
     # 各種設定を読み込む
     model_config = OmegaConf.load(to_absolute_path(config[typ].model_yaml))
     model = hydra.utils.instantiate(model_config.netG).to(device)
-    checkpoint = torch.load(config[typ].checkpoint,
-                            map_location=lambda storage,
-                            loc: storage)
-    model.load_state_dict(checkpoint['state_dict'])
+    checkpoint = torch.load(config[typ].checkpoint, map_location=lambda storage, loc: storage)
+    model.load_state_dict(checkpoint["state_dict"])
     in_scaler = joblib.load(config[typ].in_scaler_path)
     out_scaler = joblib.load(config[typ].out_scaler_path)
     model.eval()
@@ -70,11 +68,10 @@ def _score2timelag(config: DictConfig, labels):
     #     config[typ].question_path = config.question_path
     # --------------------------------------
     # hedファイルを辞書として読み取る。
-    binary_dict, continuous_dict = \
-        hts.load_question_set(question_path, append_hat_for_LL=False)
+    binary_dict, continuous_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
     # pitch indices in the input features
     # pitch_idx = len(binary_dict) + 1
-    pitch_indices = np.arange(len(binary_dict), len(binary_dict)+3)
+    pitch_indices = np.arange(len(binary_dict), len(binary_dict) + 3)
 
     # check force_clip_input_features (for backward compatibility)
     force_clip_input_features = True
@@ -82,7 +79,7 @@ def _score2timelag(config: DictConfig, labels):
         force_clip_input_features = config.timelag.force_clip_input_features
     except:
         logger.info(f"force_clip_input_features of {typ} is not set so enabled as default")
-        
+
     # timelagモデルを適用
     # Time-lag
     lag = predict_timelag(
@@ -98,7 +95,7 @@ def _score2timelag(config: DictConfig, labels):
         config.log_f0_conditioning,
         config.timelag.allowed_range,
         config.timelag.allowed_range_rest,
-        force_clip_input_features
+        force_clip_input_features,
     )
     # -----------------------------------------------------
     # ここまで nnsvs.bin.synthesis.synthesis() の内容 -----
@@ -121,9 +118,9 @@ def _score2duration(config: DictConfig, labels):
     logger = getLogger(config.verbose)
     logger.info(OmegaConf.to_yaml(config))
 
-    typ = 'duration'
+    typ = "duration"
     # CUDAが使えるかどうか
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # maybe_set_checkpoints_(config) のかわり
     set_checkpoint(config, typ)
@@ -133,10 +130,8 @@ def _score2duration(config: DictConfig, labels):
     # 各種設定を読み込む
     model_config = OmegaConf.load(to_absolute_path(config[typ].model_yaml))
     model = hydra.utils.instantiate(model_config.netG).to(device)
-    checkpoint = torch.load(config[typ].checkpoint,
-                            map_location=lambda storage,
-                            loc: storage)
-    model.load_state_dict(checkpoint['state_dict'])
+    checkpoint = torch.load(config[typ].checkpoint, map_location=lambda storage, loc: storage)
+    model.load_state_dict(checkpoint["state_dict"])
     in_scaler = joblib.load(config[typ].in_scaler_path)
     out_scaler = joblib.load(config[typ].out_scaler_path)
     model.eval()
@@ -160,11 +155,10 @@ def _score2duration(config: DictConfig, labels):
     #     config[typ].question_path = config.question_path
     # --------------------------------------
     # hedファイルを辞書として読み取る。
-    binary_dict, numeric_dict = \
-        hts.load_question_set(question_path, append_hat_for_LL=False)
+    binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
     # pitch indices in the input features
     # pitch_idx = len(binary_dict) + 1
-    pitch_indices = np.arange(len(binary_dict), len(binary_dict)+3)
+    pitch_indices = np.arange(len(binary_dict), len(binary_dict) + 3)
 
     # check force_clip_input_features (for backward compatibility)
     force_clip_input_features = True
@@ -174,19 +168,7 @@ def _score2duration(config: DictConfig, labels):
         logger.info(f"force_clip_input_features of {typ} is not set so enabled as default")
 
     # durationモデルを適用
-    duration = predict_duration(
-        device,
-        labels,
-        model,
-        model_config,
-        in_scaler,
-        out_scaler,
-        binary_dict,
-        numeric_dict,
-        pitch_indices,
-        config.log_f0_conditioning,
-        force_clip_input_features
-    )
+    duration = predict_duration(device, labels, model, model_config, in_scaler, out_scaler, binary_dict, numeric_dict, pitch_indices, config.log_f0_conditioning, force_clip_input_features)
     # durationのタプルまたはndarrayを返す
     return duration
 
@@ -205,5 +187,5 @@ def score2timing(config: DictConfig, path_score, path_timing):
     timing = postprocess_duration(score, duration, timelag)
 
     # timingファイルを出力する
-    with open(path_timing, 'w', encoding='utf-8') as f:
+    with open(path_timing, "w", encoding="utf-8") as f:
         f.write(str(timing))

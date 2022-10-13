@@ -38,9 +38,7 @@ def ndarray_as_labels(array_2d: np.ndarray, labels: hts.HTSLabelFile) -> hts.HTS
     elif array_2d.shape[1] == 2:
         new_labels.end_times = np.ravel(np.round(array_2d[:, 1]).astype(int))
     else:
-        raise ValueError(
-            f"new_labels.shape should be (2, 1) or (2, 2). (new_labels.shape = {new_labels.shape})"
-        )
+        raise ValueError(f"new_labels.shape should be (2, 1) or (2, 2). (new_labels.shape = {new_labels.shape})")
     return new_labels
 
 
@@ -52,10 +50,8 @@ def set_checkpoint(config: DictConfig, typ: str):
         raise ValueError('"model_dir" config is required')
     model_dir = to_absolute_path(config.model_dir)
     # config.timelagに項目を追加
-    config[typ].model_yaml = \
-        join(model_dir, typ, 'model.yaml')
-    config[typ].checkpoint = \
-        join(model_dir, typ, config[typ].checkpoint)
+    config[typ].model_yaml = join(model_dir, typ, "model.yaml")
+    config[typ].checkpoint = join(model_dir, typ, config[typ].checkpoint)
 
 
 def set_normalization_stat(config: DictConfig, typ: str):
@@ -66,10 +62,8 @@ def set_normalization_stat(config: DictConfig, typ: str):
         raise ValueError('"stats_dir" config is required')
     stats_dir = to_absolute_path(config.stats_dir)
     # config.timelagに項目を追加
-    config[typ].in_scaler_path = \
-        join(stats_dir, f'in_{typ}_scaler.joblib')
-    config[typ].out_scaler_path = \
-        join(stats_dir, f'out_{typ}_scaler.joblib')
+    config[typ].in_scaler_path = join(stats_dir, f"in_{typ}_scaler.joblib")
+    config[typ].out_scaler_path = join(stats_dir, f"out_{typ}_scaler.joblib")
 
 
 def load_qustion(question_path, append_hat_for_LL=False) -> tuple:
@@ -77,9 +71,7 @@ def load_qustion(question_path, append_hat_for_LL=False) -> tuple:
     question.hed ファイルを読み取って、
     binary_dict, continuous_dict, pitch_idx, pitch_indices を返す。
     """
-    binary_dict, continuous_dict = \
-        hts.load_question_set(
-            question_path, append_hat_for_LL=append_hat_for_LL)
+    binary_dict, continuous_dict = hts.load_question_set(question_path, append_hat_for_LL=append_hat_for_LL)
     pitch_indices = np.arange(len(binary_dict), len(binary_dict) + 3)
     pitch_idx = len(binary_dict) + 1
     return (binary_dict, continuous_dict, pitch_indices, pitch_idx)
