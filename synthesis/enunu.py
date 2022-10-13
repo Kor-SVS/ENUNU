@@ -9,16 +9,15 @@
   - キャッシュフォルダでいいと思う。
 3. LABファイル→WAVファイル
 """
+import os
 import sys
 import warnings
-from os.path import dirname
-from sys import argv
 from typing import Union
 
 import colored_traceback.always  # pylint: disable=unused-import
 
 # ENUNUのフォルダ直下にあるenulibフォルダをimportできるようにする
-sys.path.append(dirname(__file__))
+sys.path.append(os.path.dirname(__file__))
 warnings.simplefilter("ignore")
 
 from enulib import enu_logic
@@ -47,7 +46,7 @@ def main(path_plugin: str, path_wav_out: Union[str, None] = None):
 
     # logging.basicConfig(level=logging.INFO)
     if path_plugin.endswith(".tmp"):
-        enu_logic.main_as_plugin(path_plugin, path_wav_out)
+        enu_logic.main_as_plugin(os.path.abspath(path_plugin), os.path.abspath(path_wav_out))
     else:
         raise ValueError("Input file must be TMP(plugin).")
 
@@ -70,11 +69,11 @@ if __name__ == "__main__":
     print(f"unknown_args: {unknown_args}")
 
     if args["mode"].lower() == "legacy":
-        if len(unknown_args) > 0:
-            main(unknown_args[0], None)
-        elif len(unknown_args) > 1:
+        if len(unknown_args) > 1:
             main(unknown_args[0], unknown_args[1])
-        elif len(argv) == 1:
+        elif len(unknown_args) > 0:
+            main(unknown_args[0], None)
+        elif len(unknown_args) == 0:
             main(input("Input file path of TMP(plugin)\n>>> ").strip('"'), None)
         else:
             raise Exception("引数が多すぎます。/ Too many arguments.")

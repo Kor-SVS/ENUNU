@@ -7,10 +7,15 @@ from copy import copy
 from os.path import join
 
 import numpy as np
+import torch
 import utaupy
 from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
 from omegaconf import DictConfig
+
+
+def get_device():
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def full2mono(path_full, path_mono):

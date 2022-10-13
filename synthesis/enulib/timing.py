@@ -6,17 +6,15 @@ timelagとdurationをまとめて実行する。
 MDN系のdurationが確率分布を持って生成されるため、フルラベルにしづらい。
 そのため、timelagとdurationをファイル出力せずにtimingまで一気にやる。
 """
-import hydra
-import joblib
 import numpy as np
-import torch
 from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
 from nnsvs.gen import postprocess_duration, predict_duration, predict_timelag
 from nnsvs.logger import getLogger
 from omegaconf import DictConfig, OmegaConf
 
-from enulib.common import set_checkpoint, set_normalization_stat
+from enulib.common import get_device
+from enulib.model_manager import get_global_model_manager
 
 logger = None
 
@@ -33,23 +31,10 @@ def _score2timelag(config: DictConfig, labels):
     logger = getLogger(config.verbose)
     logger.info(OmegaConf.to_yaml(config))
 
-    typ = "timelag"
     # CUDAが使えるかどうか
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
-    # maybe_set_checkpoints_(config) のかわり
-    set_checkpoint(config, typ)
-    # maybe_set_normalization_stats_(config) のかわり
-    set_normalization_stat(config, typ)
-
-    # 各種設定を読み込む
-    model_config = OmegaConf.load(to_absolute_path(config[typ].model_yaml))
-    model = hydra.utils.instantiate(model_config.netG).to(device)
-    checkpoint = torch.load(config[typ].checkpoint, map_location=lambda storage, loc: storage)
-    model.load_state_dict(checkpoint["state_dict"])
-    in_scaler = joblib.load(config[typ].in_scaler_path)
-    out_scaler = joblib.load(config[typ].out_scaler_path)
-    model.eval()
+    model_config, model, in_scaler, out_scaler = get_global_model_manager().get_timelag_model(config, device)
     # -----------------------------------------------------
     # ここまで nnsvs.bin.synthesis.my_app() の内容 --------
     # -----------------------------------------------------
@@ -78,7 +63,7 @@ def _score2timelag(config: DictConfig, labels):
     try:
         force_clip_input_features = config.timelag.force_clip_input_features
     except:
-        logger.info(f"force_clip_input_features of {typ} is not set so enabled as default")
+        logger.info(f"force_clip_input_features of timelag is not set so enabled as default")
 
     # timelagモデルを適用
     # Time-lag
@@ -118,23 +103,10 @@ def _score2duration(config: DictConfig, labels):
     logger = getLogger(config.verbose)
     logger.info(OmegaConf.to_yaml(config))
 
-    typ = "duration"
     # CUDAが使えるかどうか
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
-    # maybe_set_checkpoints_(config) のかわり
-    set_checkpoint(config, typ)
-    # maybe_set_normalization_stats_(config) のかわり
-    set_normalization_stat(config, typ)
-
-    # 各種設定を読み込む
-    model_config = OmegaConf.load(to_absolute_path(config[typ].model_yaml))
-    model = hydra.utils.instantiate(model_config.netG).to(device)
-    checkpoint = torch.load(config[typ].checkpoint, map_location=lambda storage, loc: storage)
-    model.load_state_dict(checkpoint["state_dict"])
-    in_scaler = joblib.load(config[typ].in_scaler_path)
-    out_scaler = joblib.load(config[typ].out_scaler_path)
-    model.eval()
+    model_config, model, in_scaler, out_scaler = get_global_model_manager().get_duration_model(config, device)
     # -----------------------------------------------------
     # ここまで nnsvs.bin.synthesis.my_app() の内容 --------
     # -----------------------------------------------------
@@ -165,10 +137,22 @@ def _score2duration(config: DictConfig, labels):
     try:
         force_clip_input_features = config.duration.force_clip_input_features
     except:
-        logger.info(f"force_clip_input_features of {typ} is not set so enabled as default")
+        logger.info(f"force_clip_input_features of duration is not set so enabled as default")
 
     # durationモデルを適用
-    duration = predict_duration(device, labels, model, model_config, in_scaler, out_scaler, binary_dict, numeric_dict, pitch_indices, config.log_f0_conditioning, force_clip_input_features)
+    duration = predict_duration(
+        device,
+        labels,
+        model,
+        model_config,
+        in_scaler,
+        out_scaler,
+        binary_dict,
+        numeric_dict,
+        pitch_indices,
+        config.log_f0_conditioning,
+        force_clip_input_features,
+    )
     # durationのタプルまたはndarrayを返す
     return duration
 

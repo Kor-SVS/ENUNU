@@ -1,12 +1,12 @@
 from datetime import datetime
-from os import chdir, makedirs, startfile
-from os.path import abspath, basename, dirname, exists, join, splitext
+import os
 from shutil import copy
 from tempfile import mkdtemp
 from typing import Iterable, List, Union
+import numpy as np
+from omegaconf import DictConfig, OmegaConf
 
 import utaupy
-from omegaconf import DictConfig, OmegaConf
 import enulib
 
 
@@ -60,25 +60,25 @@ def main_as_plugin(path_plugin: str, path_wav: Union[str, None] = None) -> str:
     config, temp_dir, path_wav = setup(path_plugin, path_wav)
     run_timing(config, temp_dir)
     run_acoustic(config, temp_dir)
-    path_wav = run_synthesizer(config, temp_dir, path_wav)
+    run_synthesizer(config, temp_dir, path_wav)
 
     # 音声を再生する。
-    if exists(path_wav):
-        startfile(path_wav)
+    # if os.path.exists(path_wav):
+    #     os.startfile(path_wav)
 
 
 def get_paths(temp_dir: str):
     # 各種出力ファイルのパスを設定
-    path_temp_ust = abspath(join(temp_dir, "temp.ust"))
-    path_temp_table = abspath(join(temp_dir, "temp.table"))
-    path_full_score = abspath(join(temp_dir, "score.full"))
-    path_mono_score = abspath(join(temp_dir, "score.lab"))
-    path_full_timing = abspath(join(temp_dir, "timing.full"))
-    path_mono_timing = abspath(join(temp_dir, "timing.lab"))
-    path_acoustic = abspath(join(temp_dir, "acoustic.csv"))
-    path_f0 = abspath(join(temp_dir, "f0.csv"))
-    path_spectrogram = abspath(join(temp_dir, "spectrogram.csv"))
-    path_aperiodicity = abspath(join(temp_dir, "aperiodicity.csv"))
+    path_temp_ust = os.path.abspath(os.path.join(temp_dir, "temp.ust"))
+    path_temp_table = os.path.abspath(os.path.join(temp_dir, "temp.table"))
+    path_full_score = os.path.abspath(os.path.join(temp_dir, "score.full"))
+    path_mono_score = os.path.abspath(os.path.join(temp_dir, "score.lab"))
+    path_full_timing = os.path.abspath(os.path.join(temp_dir, "timing.full"))
+    path_mono_timing = os.path.abspath(os.path.join(temp_dir, "timing.lab"))
+    path_acoustic = os.path.abspath(os.path.join(temp_dir, "acoustic.csv"))
+    path_f0 = os.path.abspath(os.path.join(temp_dir, "f0.csv"))
+    path_spectrogram = os.path.abspath(os.path.join(temp_dir, "spectrogram.csv"))
+    path_aperiodicity = os.path.abspath(os.path.join(temp_dir, "aperiodicity.csv"))
 
     return path_temp_ust, path_temp_table, path_full_score, path_mono_score, path_full_timing, path_mono_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity
 
@@ -87,13 +87,13 @@ def setup(path_plugin: str, path_wav: Union[str, None] = None):
     # UTAUの一時ファイルに書いてある設定を読み取る
     print(f"{datetime.now()} : reading settings in TMP")
     path_ust, voice_dir, _ = get_project_path(path_plugin)
-    path_enuconfig = join(voice_dir, "enuconfig.yaml")
+    path_enuconfig = os.path.join(voice_dir, "enuconfig.yaml")
 
     # configファイルがあるか調べて、なければ例外処理
-    if not exists(path_enuconfig):
+    if not os.path.exists(path_enuconfig):
         raise Exception("音源フォルダに enuconfig.yaml が見つかりません。" "UTAU音源選択でENUNU用モデルを指定してください。")
     # カレントディレクトリを音源フォルダに変更する
-    chdir(voice_dir)
+    os.chdir(voice_dir)
 
     # configファイルを読み取る
     print(f"{datetime.now()} : reading enuconfig")
@@ -106,26 +106,26 @@ def setup(path_plugin: str, path_wav: Union[str, None] = None):
     if path_wav is None:
         # 入出力パスを設定する
         if path_ust is not None:
-            songname = splitext(basename(path_ust))[0]
-            out_dir = dirname(path_ust)
-            temp_dir = join(out_dir, f"{songname}_enutemp")
-            path_wav = abspath(join(out_dir, f"{songname}__{str_now}.wav"))
+            songname = os.path.splitext(os.path.basename(path_ust))[0]
+            out_dir = os.path.dirname(path_ust)
+            temp_dir = os.path.join(out_dir, f"{songname}_enutemp")
+            path_wav = os.path.abspath(os.path.join(out_dir, f"{songname}__{str_now}.wav"))
         # WAV出力パス指定なしかつUST未保存の場合
         else:
             print("USTが保存されていないので一時フォルダにWAV出力します。")
             songname = f"temp__{str_now}"
             out_dir = mkdtemp(prefix="enunu-")
-            temp_dir = join(out_dir, f"{songname}_enutemp")
-            path_wav = abspath(join(out_dir, f"{songname}__{str_now}.wav"))
+            temp_dir = os.path.join(out_dir, f"{songname}_enutemp")
+            path_wav = os.path.abspath(os.path.join(out_dir, f"{songname}__{str_now}.wav"))
     # WAV出力パスが指定されている場合
     else:
-        songname = splitext(basename(path_wav))[0]
-        out_dir = dirname(path_wav)
-        temp_dir = join(out_dir, f"{songname}_enutemp")
-        path_wav = abspath(path_wav)
+        songname = os.path.splitext(os.path.basename(path_wav))[0]
+        out_dir = os.path.dirname(path_wav)
+        temp_dir = os.path.join(out_dir, f"{songname}_enutemp")
+        path_wav = os.path.abspath(path_wav)
 
     # 一時出力フォルダがなければつくる
-    makedirs(temp_dir, exist_ok=True)
+    os.makedirs(temp_dir, exist_ok=True)
     # 各種出力ファイルのパスを設定
     # path_plugin = path_plugin
     path_temp_ust, path_temp_table, path_full_score, path_mono_score, path_full_timing, path_mono_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity = get_paths(temp_dir)
@@ -305,6 +305,14 @@ def run_synthesizer(config: DictConfig, temp_dir: str, path_wav: Union[str, None
         print(f"{datetime.now()} : synthesizing WAV with built-in function")
         # WAVファイル出力
         enulib.world.world2wav(config, path_f0, path_spectrogram, path_aperiodicity, path_wav)
+
+    # 組み込まれたVocoderで合成する場合
+    elif synthesizer == "vocoder":
+        print(f"{datetime.now()} : synthesizing WAV with vocoder model")
+        # timing.full から acoustic.csv を作る。
+        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic)
+        enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_acoustic, path_wav)
+        # enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_wav)
 
     # 別途指定するソフトで合成する場合
     else:

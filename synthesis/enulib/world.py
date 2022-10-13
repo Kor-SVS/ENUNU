@@ -3,11 +3,13 @@
 """
 acousticのファイルをWAVファイルにするまでの処理を行う。
 """
+from typing import List
 import hydra
 import joblib
 import numpy as np
 import pysptk
 import pyworld
+import torch
 from enulib.common import set_checkpoint, set_normalization_stat
 from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
@@ -20,7 +22,11 @@ from nnsvs.pitch import lowpass_filter
 from nnsvs.postfilters import variance_scaling
 from omegaconf import DictConfig, OmegaConf
 from scipy.io import wavfile
-import torch
+
+from nnsvs.io.hts import segment_labels
+
+from enulib.common import get_device
+from enulib.model_manager import get_global_model_manager
 
 logger = None
 
@@ -136,21 +142,15 @@ def generate_wav_file(config: DictConfig, wav, out_wav_path):
 #     generate_wav_file(config, generated_waveform, path_wav)
 
 
-def acoustic2world(
+def get_acoustic_feature(
     config: DictConfig,
     path_timing,
     path_acoustic,
-    path_f0,
-    path_spcetrogram,
-    path_aperiodicity,
     trajectory_smoothing=True,
     trajectory_smoothing_cutoff=50,
     vibrato_scale=1.0,
     vuv_threshold=0.1,
 ):
-    """
-    Acousticの行列のCSVを読んで、WAVファイルとして出力する。
-    """
     # loggerの設定
     global logger  # pylint: disable=global-statement
     logger = getLogger(config.verbose)
@@ -278,6 +278,27 @@ def acoustic2world(
         for d in range(bap.shape[1]):
             bap[:, d] = lowpass_filter(bap[:, d], modfs, cutoff=trajectory_smoothing_cutoff)
 
+    return mgc, lf0, vuv, bap
+
+
+def acoustic2world(
+    config: DictConfig,
+    path_timing,
+    path_acoustic,
+    path_f0,
+    path_spcetrogram,
+    path_aperiodicity,
+    trajectory_smoothing=True,
+    trajectory_smoothing_cutoff=50,
+    vibrato_scale=1.0,
+    vuv_threshold=0.1,
+):
+    """
+    Acousticの行列のCSVを読んで、WAVファイルとして出力する。
+    """
+
+    mgc, lf0, vuv, bap = get_acoustic_feature(config, path_timing, path_acoustic, trajectory_smoothing, trajectory_smoothing_cutoff, vibrato_scale, vuv_threshold)
+
     # Generate WORLD parameters
     f0, spectrogram, aperiodicity = gen_world_params(mgc, lf0, vuv, bap, config.sample_rate, vuv_threshold=vuv_threshold)
 
@@ -296,4 +317,56 @@ def world2wav(config: DictConfig, path_f0, path_spectrogram, path_aperiodicity, 
     wav = bandpass_filter(wav, config.sample_rate)
 
     # 音量を調整して 32bit float でファイル出力
+    generate_wav_file(config, wav, path_wav)
+
+
+def acoustic2vocoder_wav(
+    config: DictConfig,
+    path_timing,
+    path_acoustic,
+    path_wav,
+    trajectory_smoothing=True,
+    trajectory_smoothing_cutoff=50,
+    vibrato_scale=1.0,
+    vuv_threshold=0.1,
+):
+    device = get_device()
+
+    duration_modified_labels = hts.load(path_timing).round_()
+
+    mgc, lf0, vuv, bap = get_acoustic_feature(config, path_timing, path_acoustic, trajectory_smoothing, trajectory_smoothing_cutoff, vibrato_scale, vuv_threshold)
+
+    model_config, model, in_scaler = get_global_model_manager().get_vocoder_model(config, device)
+
+    vuv = (vuv > vuv_threshold).astype(np.float32)
+    voc_inp = torch.from_numpy(in_scaler.transform(np.concatenate([mgc, lf0, vuv, bap], axis=-1))).float().to(device)
+
+    segmented_labels: List[hts.HTSLabelFile] = segment_labels(duration_modified_labels)
+    from tqdm.auto import tqdm
+
+    wavs = []
+    with torch.no_grad():
+        end_time = 0
+        for seg_labels in tqdm(segmented_labels):
+            start_time = seg_labels.start_times[0] // 50000 + end_time
+            end_time += seg_labels.end_times[-1] // 50000
+
+            wav = model.inference(voc_inp[start_time:end_time]).view(-1).to("cpu").numpy()
+
+            wavs.append(wav)
+            print(f"infer: {start_time} ~ {end_time}")
+
+    # Concatenate segmented wavs
+    wav = np.concatenate(wavs, axis=0).reshape(-1)
+
+    # post-processing
+    wav = bandpass_filter(wav, model_config.sampling_rate)
+
+    if np.max(wav) > 10:
+        # data is likely already in [-32768, 32767]
+        wav = wav.astype(np.int16)
+    else:
+        wav = np.clip(wav, -1.0, 1.0)
+        wav = (wav * 32767.0).astype(np.int16)
+
     generate_wav_file(config, wav, path_wav)

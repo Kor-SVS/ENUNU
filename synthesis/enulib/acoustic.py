@@ -29,17 +29,15 @@
 """
 発声タイミングの情報を持ったフルラベルから、WORLD用の音響特長量を推定する。
 """
-import hydra
-import joblib
 import numpy as np
-import torch
 from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
 from nnsvs.gen import predict_acoustic
 from nnsvs.logger import getLogger
 from omegaconf import DictConfig, OmegaConf
 
-from enulib.common import set_checkpoint, set_normalization_stat
+from enulib.common import get_device
+from enulib.model_manager import get_global_model_manager
 
 logger = None
 
@@ -56,24 +54,10 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path):
     logger = getLogger(config.verbose)
     logger.info(OmegaConf.to_yaml(config))
 
-    typ = "acoustic"
     # CUDAが使えるかどうか
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
 
-    # maybe_set_checkpoints_(config) のかわり
-    set_checkpoint(config, typ)
-    # maybe_set_normalization_stats_(config) のかわり
-    set_normalization_stat(config, typ)
-
-    # 各種設定を読み込む
-    model_config = OmegaConf.load(to_absolute_path(config[typ].model_yaml))
-    model = hydra.utils.instantiate(model_config.netG).to(device)
-    checkpoint = torch.load(config[typ].checkpoint, map_location=lambda storage, loc: storage)
-
-    model.load_state_dict(checkpoint["state_dict"])
-    in_scaler = joblib.load(config[typ].in_scaler_path)
-    out_scaler = joblib.load(config[typ].out_scaler_path)
-    model.eval()
+    model_config, model, in_scaler, out_scaler = get_global_model_manager().get_acoustic_model(config, device)
     # -----------------------------------------------------
     # ここまで nnsvs.bin.synthesis.my_app() の内容 --------
     # -----------------------------------------------------
@@ -102,7 +86,7 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path):
     try:
         force_clip_input_features = config.acoustic.force_clip_input_features
     except:
-        logger.info(f"force_clip_input_features of {typ} is not set so enabled as default")
+        logger.info(f"force_clip_input_features of acoustic is not set so enabled as default")
 
     acoustic_features = predict_acoustic(
         device,
