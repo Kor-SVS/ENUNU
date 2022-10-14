@@ -3,6 +3,7 @@
 """
 acousticのファイルをWAVファイルにするまでの処理を行う。
 """
+import os
 from typing import List
 import hydra
 import joblib
@@ -163,6 +164,7 @@ def get_acoustic_feature(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # 各種設定を読み込む
+    set_checkpoint(config, "acoustic")
     acoustic_model_config = OmegaConf.load(to_absolute_path(config["acoustic"].model_yaml))
 
     # hedファイルを読み取る。
@@ -329,6 +331,7 @@ def acoustic2vocoder_wav(
     trajectory_smoothing_cutoff=50,
     vibrato_scale=1.0,
     vuv_threshold=0.1,
+    use_segment_label=False,
 ):
     device = get_device()
 
@@ -339,25 +342,57 @@ def acoustic2vocoder_wav(
     model_config, model, in_scaler = get_global_model_manager().get_vocoder_model(config, device)
 
     vuv = (vuv > vuv_threshold).astype(np.float32)
-    voc_inp = torch.from_numpy(in_scaler.transform(np.concatenate([mgc, lf0, vuv, bap], axis=-1))).float().to(device)
+    voc_inp = torch.from_numpy(in_scaler.transform(np.concatenate([mgc, lf0, vuv, bap], axis=-1))).float()
 
-    segmented_labels: List[hts.HTSLabelFile] = segment_labels(duration_modified_labels)
-    from tqdm.auto import tqdm
+    if use_segment_label:
+        segmented_labels: List[hts.HTSLabelFile] = segment_labels(duration_modified_labels)
+        from tqdm.auto import tqdm
 
-    wavs = []
-    with torch.no_grad():
-        end_time = 0
-        for seg_labels in tqdm(segmented_labels):
-            start_time = seg_labels.start_times[0] // 50000 + end_time
-            end_time += seg_labels.end_times[-1] // 50000
+        overlap = 100
+        overlap_wav = overlap * model_config.hop_size
 
-            wav = model.inference(voc_inp[start_time:end_time]).view(-1).to("cpu").numpy()
+        wavs = []
+        with torch.no_grad():
+            end_time_store = 0
+            for idx, seg_labels in enumerate(tqdm(segmented_labels)):
+                start_time = seg_labels.start_times[0] // 50000 + end_time_store
+                end_time = seg_labels.end_times[-1] // 50000 + end_time_store
+                end_time_store = end_time
 
-            wavs.append(wav)
-            print(f"infer: {start_time} ~ {end_time}")
+                if idx > 0:
+                    start_time -= overlap
+                if idx < len(segmented_labels) - 1:
+                    end_time += overlap
 
-    # Concatenate segmented wavs
-    wav = np.concatenate(wavs, axis=0).reshape(-1)
+                wav = model.inference(voc_inp[start_time:end_time].to(device)).view(-1).to("cpu").numpy()
+
+                if idx > 0:
+                    wav = wav[overlap_wav:]
+                if idx < len(segmented_labels) - 1:
+                    wav = wav[:-overlap_wav]
+
+                wavs.append(wav)
+                print(f"infer: {start_time} ~ {end_time}")
+
+                # ############################################################################
+                # # post-processing
+                # wav_t = bandpass_filter(wav, model_config.sampling_rate)
+
+                # if np.max(wav_t) > 10:
+                #     # data is likely already in [-32768, 32767]
+                #     wav_t = wav_t.astype(np.int16)
+                # else:
+                #     wav_t = np.clip(wav_t, -1.0, 1.0)
+                #     wav_t = (wav_t * 32767.0).astype(np.int16)
+
+                # generate_wav_file(config, wav_t, os.path.splitext(path_wav)[0] + f"_{str(idx).zfill(3)}.wav")
+                # ############################################################################
+
+        # Concatenate segmented wavs
+        wav = np.concatenate(wavs, axis=0).reshape(-1)
+    else:
+        with torch.no_grad():
+            wav = model.inference(voc_inp.to(device)).view(-1).to("cpu").numpy()
 
     # post-processing
     wav = bandpass_filter(wav, model_config.sampling_rate)

@@ -46,7 +46,11 @@ def main(path_plugin: str, path_wav_out: Union[str, None] = None):
 
     # logging.basicConfig(level=logging.INFO)
     if path_plugin.endswith(".tmp"):
-        enu_logic.main_as_plugin(os.path.abspath(path_plugin), os.path.abspath(path_wav_out))
+        if not os.path.isabs(path_plugin):
+            path_plugin = os.path.abspath(path_plugin)
+        if not os.path.isabs(path_wav_out):
+            path_wav_out = os.path.abspath(path_wav_out)
+        enu_logic.main_as_plugin(path_plugin, path_wav_out)
     else:
         raise ValueError("Input file must be TMP(plugin).")
 
@@ -74,7 +78,7 @@ if __name__ == "__main__":
         elif len(unknown_args) > 0:
             main(unknown_args[0], None)
         elif len(unknown_args) == 0:
-            main(input("Input file path of TMP(plugin)\n>>> ").strip('"'), None)
+            main(input("Input file path of TMP(plugin)\n>>> ").strip('"'), input("Wav path\n>>> ").strip('"'))
         else:
             raise Exception("引数が多すぎます。/ Too many arguments.")
     elif args["mode"] == "server":

@@ -249,7 +249,11 @@ def run_acoustic(config: DictConfig, temp_dir: str):
     elif calculator == "built-in":
         print(f"{datetime.now()} : calculating acoustic with built-in function")
         # timing.full から acoustic.csv を作る。
-        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic)
+        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=True)
+    elif calculator == "built-in-world":
+        # timing.full から acoustic.csv を作る。
+        print(f"{datetime.now()} : calculating acoustic with built-in-world function")
+        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=True)
         # acoustic のファイルから f0, spectrogram, aperiodicity のファイルを出力
         enulib.world.acoustic2world(config, path_full_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity)
     else:
@@ -310,9 +314,7 @@ def run_synthesizer(config: DictConfig, temp_dir: str, path_wav: Union[str, None
     elif synthesizer == "vocoder":
         print(f"{datetime.now()} : synthesizing WAV with vocoder model")
         # timing.full から acoustic.csv を作る。
-        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic)
-        enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_acoustic, path_wav)
-        # enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_wav)
+        enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_acoustic, path_wav, use_segment_label=True)
 
     # 別途指定するソフトで合成する場合
     else:

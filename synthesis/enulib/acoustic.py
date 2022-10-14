@@ -29,6 +29,7 @@
 """
 発声タイミングの情報を持ったフルラベルから、WORLD用の音響特長量を推定する。
 """
+from typing import List
 import numpy as np
 from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
@@ -36,13 +37,15 @@ from nnsvs.gen import predict_acoustic
 from nnsvs.logger import getLogger
 from omegaconf import DictConfig, OmegaConf
 
+from nnsvs.io.hts import segment_labels
+
 from enulib.common import get_device
 from enulib.model_manager import get_global_model_manager
 
 logger = None
 
 
-def timing2acoustic(config: DictConfig, timing_path, acoustic_path):
+def timing2acoustic(config: DictConfig, timing_path, acoustic_path, use_segment_label=False):
     """
     フルラベルを読み取って、音響特長量のファイルを出力する。
     """
@@ -88,19 +91,43 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path):
     except:
         logger.info(f"force_clip_input_features of acoustic is not set so enabled as default")
 
-    acoustic_features = predict_acoustic(
-        device,
-        duration_modified_labels,
-        model,
-        model_config,
-        in_scaler,
-        out_scaler,
-        binary_dict,
-        continuous_dict,
-        config.acoustic.subphone_features,
-        pitch_indices,
-        config.log_f0_conditioning,
-    )
+    if use_segment_label:
+        segmented_labels: List[hts.HTSLabelFile] = segment_labels(duration_modified_labels)
+        from tqdm.auto import tqdm
+
+        acoustic_features_list = []
+        for seg_labels in tqdm(segmented_labels):
+            acoustic_features = predict_acoustic(
+                device,
+                seg_labels,
+                model,
+                model_config,
+                in_scaler,
+                out_scaler,
+                binary_dict,
+                continuous_dict,
+                config.acoustic.subphone_features,
+                pitch_indices,
+                config.log_f0_conditioning,
+            )
+            acoustic_features_list.append(acoustic_features)
+
+        acoustic_features = np.concatenate(acoustic_features_list, axis=0)
+
+    else:
+        acoustic_features = predict_acoustic(
+            device,
+            duration_modified_labels,
+            model,
+            model_config,
+            in_scaler,
+            out_scaler,
+            binary_dict,
+            continuous_dict,
+            config.acoustic.subphone_features,
+            pitch_indices,
+            config.log_f0_conditioning,
+        )
 
     # csvファイルとしてAcousticの行列を出力
     np.savetxt(acoustic_path, acoustic_features, delimiter=",")
