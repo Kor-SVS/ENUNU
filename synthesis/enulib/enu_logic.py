@@ -59,8 +59,8 @@ def main_as_plugin(path_plugin: str, path_wav: Union[str, None] = None) -> str:
     """
     config, temp_dir, path_wav = setup(path_plugin, path_wav)
     run_timing(config, temp_dir)
-    run_acoustic(config, temp_dir)
-    run_synthesizer(config, temp_dir, path_wav)
+    run_acoustic(config, temp_dir, use_segment_label=True)
+    run_synthesizer(config, temp_dir, path_wav, use_segment_label=True)
 
     # 音声を再生する。
     # if os.path.exists(path_wav):
@@ -238,7 +238,7 @@ def run_timing(config: DictConfig, temp_dir: str):
     return path_full_timing, path_mono_timing
 
 
-def run_acoustic(config: DictConfig, temp_dir: str):
+def run_acoustic(config: DictConfig, temp_dir: str, use_segment_label=False):
     path_temp_ust, path_temp_table, path_full_score, path_mono_score, path_full_timing, path_mono_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity = get_paths(temp_dir)
 
     # 音響パラメータを推定 timing.full -> acoustic---------------------------
@@ -249,11 +249,11 @@ def run_acoustic(config: DictConfig, temp_dir: str):
     elif calculator == "built-in":
         print(f"{datetime.now()} : calculating acoustic with built-in function")
         # timing.full から acoustic.csv を作る。
-        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=True)
+        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=use_segment_label)
     elif calculator == "built-in-world":
         # timing.full から acoustic.csv を作る。
         print(f"{datetime.now()} : calculating acoustic with built-in-world function")
-        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=True)
+        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=use_segment_label)
         # acoustic のファイルから f0, spectrogram, aperiodicity のファイルを出力
         enulib.world.acoustic2world(config, path_full_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity)
     else:
@@ -294,7 +294,7 @@ def run_acoustic(config: DictConfig, temp_dir: str):
     return path_acoustic, path_f0, path_spectrogram, path_aperiodicity
 
 
-def run_synthesizer(config: DictConfig, temp_dir: str, path_wav: Union[str, None] = None):
+def run_synthesizer(config: DictConfig, temp_dir: str, path_wav: Union[str, None] = None, use_segment_label=False):
     path_temp_ust, path_temp_table, path_full_score, path_mono_score, path_full_timing, path_mono_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity = get_paths(temp_dir)
 
     # WORLDを使って音声ファイルを生成: acoustic.csv -> <songname>.wav--------------
@@ -314,7 +314,7 @@ def run_synthesizer(config: DictConfig, temp_dir: str, path_wav: Union[str, None
     elif synthesizer == "vocoder":
         print(f"{datetime.now()} : synthesizing WAV with vocoder model")
         # timing.full から acoustic.csv を作る。
-        enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_acoustic, path_wav, use_segment_label=True)
+        enulib.world.acoustic2vocoder_wav(config, path_full_timing, path_acoustic, path_wav, use_segment_label=use_segment_label)
 
     # 別途指定するソフトで合成する場合
     else:

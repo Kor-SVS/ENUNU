@@ -63,6 +63,28 @@ def acoustic(path_ust: str):
     }
 
 
+def vocoder_synthesis(path_ust: str, path_wav: str):
+    config, temp_dir, _ = enu_logic.setup(path_ust)
+    (
+        path_temp_ust,
+        path_temp_table,
+        path_full_score,
+        path_mono_score,
+        path_full_timing,
+        path_mono_timing,
+        path_acoustic,
+        path_f0,
+        path_spectrogram,
+        path_aperiodicity,
+    ) = enu_logic.get_paths(temp_dir)
+    enulib.utauplugin2score.utauplugin2score(path_temp_ust, path_temp_table, path_full_timing, strict_sinsy_style=False, lang_mode=config.get("lang_mode", "jpn"))
+    path_acoustic, _, _, _ = enu_logic.run_acoustic(config, temp_dir)
+
+    enu_logic.run_synthesizer(config, temp_dir, path_wav)
+
+    return {"path_wav": path_wav}
+
+
 def poll_socket(socket, timetick=100):
     poller = zmq.Poller()
     poller.register(socket, zmq.POLLIN)
@@ -93,6 +115,8 @@ def start_server(port=15555):
                 response["result"] = timing(request[1])
             elif request[0] == "acoustic":
                 response["result"] = acoustic(request[1])
+            elif request[0] == "vocoder":
+                response["result"] = vocoder_synthesis(request[1], request[2])
             else:
                 raise NotImplementedError("unexpected command %s" % request[0])
         except Exception as e:
