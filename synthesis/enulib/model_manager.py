@@ -51,7 +51,7 @@ class ModelManager(object):
     def __init__(self):
         self.model_dict = {}
 
-    def __load_scaler(self, typ: str, config: DictConfig):
+    def load_scaler(self, typ: str, config: DictConfig):
         # maybe_set_normalization_stats_(config) のかわり
         set_normalization_stat(config, typ)
 
@@ -60,12 +60,18 @@ class ModelManager(object):
 
         return in_scaler, out_scaler
 
-    def __load_model(self, typ: str, config: DictConfig, device: str):
+    def load_config(self, typ: str, config: DictConfig):
         # maybe_set_checkpoints_(config) のかわり
         set_checkpoint(config, typ)
 
         # 各種設定を読み込む
         model_config = OmegaConf.load(to_absolute_path(config[typ].model_yaml))
+
+        return model_config
+
+    def load_model(self, typ: str, config: DictConfig, device: str):
+        # 各種設定を読み込む
+        model_config = self.load_config(typ, config)
         model: BaseModel = hydra.utils.instantiate(model_config.netG).to(device)
         checkpoint = torch.load(config[typ].checkpoint, map_location=lambda storage, loc: storage)
         model.load_state_dict(checkpoint["state_dict"])
@@ -74,7 +80,7 @@ class ModelManager(object):
         return model_config, model
 
     def __load_model_package(self, typ: str, config: DictConfig, device: str):
-        return *self.__load_model(typ, config, device), *self.__load_scaler(typ, config)
+        return *self.load_model(typ, config, device), *self.load_scaler(typ, config)
 
     def get_timelag_model(self, config: DictConfig, device: str):
         return self.__load_model_package("timelag", config, device)
@@ -85,8 +91,17 @@ class ModelManager(object):
     def get_acoustic_model(self, config: DictConfig, device: str):
         return self.__load_model_package("acoustic", config, device)
 
-    def get_post_filter_model(self):
-        pass
+    def get_post_filter_model(self, config: DictConfig, device: str, post_filter_type: str):
+        postfilter_model_config, postfilter_model, postfilter_out_scaler = None, None, None
+
+        if post_filter_type in ["nnsvs", "gv"]:
+            postfilter_out_scaler = joblib.load(config["postfilter"].out_scaler_path)
+
+            if post_filter_type == "nnsvs":
+                postfilter_model_config = OmegaConf.load(to_absolute_path(config["postfilter"].model_yaml))
+                postfilter_model = hydra.utils.instantiate(postfilter_model_config.netG).to(device)
+
+        return postfilter_model_config, postfilter_model, postfilter_out_scaler
 
     def get_vocoder_model(self, config: DictConfig, device: str):
         if not _pwg_available:

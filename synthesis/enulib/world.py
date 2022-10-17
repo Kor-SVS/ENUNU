@@ -160,13 +160,6 @@ def get_acoustic_feature(
     # load labels and question
     duration_modified_labels = hts.load(path_timing).round_()
 
-    # CUDAが使えるかどうか
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # 各種設定を読み込む
-    set_checkpoint(config, "acoustic")
-    acoustic_model_config = OmegaConf.load(to_absolute_path(config["acoustic"].model_yaml))
-
     # hedファイルを読み取る。
     question_path = to_absolute_path(config.question_path)
     # hts2wav.pyだとこう↓-----------------
@@ -197,7 +190,7 @@ def get_acoustic_feature(
         print(f"There is no post_filter_type setting so merlin is used.")
 
     try:
-        post_filter_type = config.acoustic.post_filter_type
+        post_filter_type = str(config.acoustic.post_filter_type).lower()
     except Exception as e:
         print(e)
         print(f"There is no post_filter_type setting so merlin is used.")
@@ -210,10 +203,15 @@ def get_acoustic_feature(
     if "post_filter" in config.acoustic.keys():
         print("post_filter is deprecated. Use post_filter_type instead.")
 
-    try:
-        postfilter_out_scaler = joblib.load(config["postfilter"].out_scaler_path)
-        # Apply GV post-filtering
-        if post_filter_type in ["nnsvs", "gv"]:
+    if post_filter_type in ["nnsvs", "gv"]:
+        try:
+            device = get_device()
+            model_manager = get_global_model_manager()
+            model_config, postfilter_model, postfilter_out_scaler = model_manager.get_post_filter_model(config, device, post_filter_type)
+
+            acoustic_model_config = model_manager.load_config("acoustic", config)
+
+            # Apply GV post-filtering
             print("Apply GV post-filtering")
             static_stream_sizes = get_static_stream_sizes(
                 acoustic_model_config.stream_sizes,
@@ -237,17 +235,14 @@ def get_acoustic_feature(
 
             # Learned post-filter using nnsvs
             if post_filter_type == "nnsvs":
-                postfilter_model_config = OmegaConf.load(to_absolute_path(config["postfilter"].model_yaml))
-                postfilter_model = hydra.utils.instantiate(postfilter_model_config.netG).to(device)
-
                 print("Apply mgc_postfilter")
                 in_feats = torch.from_numpy(acoustic_features).float().unsqueeze(0)
                 in_feats = postfilter_out_scaler.transform(in_feats).float().to(device)
                 out_feats = postfilter_model.inference(in_feats, [in_feats.shape[1]])
                 acoustic_features = postfilter_out_scaler.inverse_transform(out_feats.detach().cpu()).squeeze(0).numpy()
-    except Exception as e:
-        print(e)
-        print("Unable to use NNSVS/GV postfilter")
+        except Exception as e:
+            print(e)
+            print("Unable to use NNSVS/GV postfilter")
 
     # Generate static features from acoustic features
     mgc, lf0, vuv, bap = gen_spsvs_static_features(
