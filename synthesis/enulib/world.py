@@ -168,6 +168,9 @@ def get_acoustic_feature(
     #     config[typ].question_path = config.question_path
     # --------------------------------------
 
+    model_manager = get_global_model_manager()
+    acoustic_model_config = model_manager.load_config("acoustic", config)
+
     # hedファイルを辞書として読み取る。
     binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
 
@@ -206,10 +209,7 @@ def get_acoustic_feature(
     if post_filter_type in ["nnsvs", "gv"]:
         try:
             device = get_device()
-            model_manager = get_global_model_manager()
             model_config, postfilter_model, postfilter_out_scaler = model_manager.get_post_filter_model(config, device, post_filter_type)
-
-            acoustic_model_config = model_manager.load_config("acoustic", config)
 
             # Apply GV post-filtering
             print("Apply GV post-filtering")
