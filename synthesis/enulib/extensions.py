@@ -32,8 +32,7 @@ def merge_mono_time_change_to_full(path_mono_lab, path_full_lab):
 
 
 def merge_full_time_change_to_mono(path_full_lab, path_mono_lab):
-    """フルラベルの時刻でモノラベルの時刻を上書きする。
-    """
+    """フルラベルの時刻でモノラベルの時刻を上書きする。"""
     # 順番入れ替えただけ
     # pylint: disable=arguments-out-of-order
     merge_mono_time_change_to_full(path_full_lab, path_mono_lab)
@@ -70,8 +69,7 @@ def merge_full_contexts_change_to_mono(path_full_lab, path_mono_lab):
 
 
 def str_has_been_changed(s_old: str, s_new: str):
-    """モノラベルやフルラベルが変更されているか調べる。
-    """
+    """モノラベルやフルラベルが変更されているか調べる。"""
     return s_old.strip() != s_new.strip()
 
 
@@ -90,9 +88,9 @@ def parse_extension_path(path) -> Union[str, None]:
     enunu_dir = dirname(dirname(__file__))
     utau_dir = utaupy.utau.utau_root()
     # 置換
-    path = path.replace(r'%e', enunu_dir)
-    path = path.replace(r'%v', voice_dir)
-    path = path.replace(r'%u', utau_dir)
+    path = path.replace(r"%e", enunu_dir)
+    path = path.replace(r"%v", voice_dir)
+    path = path.replace(r"%u", utau_dir)
     return path
 
 
@@ -106,9 +104,9 @@ def run_extension(path=None, **kwargs):
     # パスに含まれるエイリアスを展開
     path = parse_extension_path(path)
     if not exists(path):
-        raise ValueError(f'指定されたファイルが見つかりません。({path})')
+        raise ValueError(f"指定されたファイルが見つかりません。({path})")
     if not isfile(path):
-        raise ValueError(f'指定されたパスはファイルではありません。({path})')
+        raise ValueError(f"指定されたパスはファイルではありません。({path})")
 
     # 拡張機能を呼び出すときのコマンド
     args = [path]
@@ -119,13 +117,13 @@ def run_extension(path=None, **kwargs):
     for key, value in kwargs.items():
         if value is None:
             continue
-        args.append(f'--{key}')
+        args.append(f"--{key}")
         args.append(value)
 
     # 拡張機能がPythonスクリプトな場合に、
     # ENUNU同梱のインタープリタで実行するようにコマンドを変更する。
-    if splitext(path.strip('"'))[1] == '.py':
+    if splitext(path.strip('"'))[1] == ".py":
         args.insert(0, abspath(executable))
 
     # 拡張機能を呼び出す。
-    subprocess.run(args, cwd=dirname(path.strip('\'"')), check=True)
+    subprocess.run(args, cwd=dirname(path.strip("'\"")), check=True)

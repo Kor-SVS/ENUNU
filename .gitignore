@@ -1,3 +1,7 @@
+/.vscode
+/venv
+/test
+
 *.exe
 *.log
 *.wav
