@@ -369,20 +369,6 @@ def acoustic2vocoder_wav(
                 wavs.append(wav)
                 print(f"infer: {start_time} ~ {end_time}")
 
-                # ############################################################################
-                # # post-processing
-                # wav_t = bandpass_filter(wav, model_config.sampling_rate)
-
-                # if np.max(wav_t) > 10:
-                #     # data is likely already in [-32768, 32767]
-                #     wav_t = wav_t.astype(np.int16)
-                # else:
-                #     wav_t = np.clip(wav_t, -1.0, 1.0)
-                #     wav_t = (wav_t * 32767.0).astype(np.int16)
-
-                # generate_wav_file(config, wav_t, os.path.splitext(path_wav)[0] + f"_{str(idx).zfill(3)}.wav")
-                # ############################################################################
-
         # Concatenate segmented wavs
         wav = np.concatenate(wavs, axis=0).reshape(-1)
     else:
