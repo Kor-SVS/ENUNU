@@ -20,7 +20,7 @@ import colored_traceback.always  # pylint: disable=unused-import
 sys.path.append(os.path.dirname(__file__))
 warnings.simplefilter("ignore")
 
-from enulib import enu_logic
+import enu_logic
 
 # try:
 #     import enulib

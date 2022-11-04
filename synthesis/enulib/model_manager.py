@@ -22,6 +22,7 @@
 # from nnsvs.postfilters import variance_scaling
 
 import os
+from typing import Tuple
 import hydra
 import joblib
 import numpy as np
@@ -91,7 +92,7 @@ class ModelManager(object):
     def get_acoustic_model(self, config: DictConfig, device: str):
         return self.__load_model_package("acoustic", config, device)
 
-    def get_post_filter_model(self, config: DictConfig, device: str, post_filter_type: str):
+    def get_post_filter_model(self, config: DictConfig, device: str, post_filter_type: str) -> Tuple[DictConfig, BaseModel, StandardScaler]:
         postfilter_model_config, postfilter_model, postfilter_out_scaler = None, None, None
 
         if post_filter_type in ["nnsvs", "gv"]:
@@ -103,7 +104,7 @@ class ModelManager(object):
 
         return postfilter_model_config, postfilter_model, postfilter_out_scaler
 
-    def get_vocoder_model(self, config: DictConfig, device: str):
+    def get_vocoder_model(self, config: DictConfig, device: str) -> Tuple[DictConfig, BaseModel, util.StandardScaler]:
         if not _pwg_available:
             raise ValueError('Unable to load "parallel_wavegan" library')
 
