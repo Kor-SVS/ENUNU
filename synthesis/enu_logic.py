@@ -1,9 +1,8 @@
-from datetime import datetime
 import os
+from datetime import datetime
 from shutil import copy
 from tempfile import mkdtemp
 from typing import Iterable, List, Union
-import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 import utaupy
@@ -247,15 +246,15 @@ def run_acoustic(config: DictConfig, temp_dir: str, use_segment_label=False):
     if calculator is None:
         print(f"{datetime.now()} : skipped acoustic calculation")
     elif calculator == "built-in":
+        # timing.full から acoustic.csv を作る。
         print(f"{datetime.now()} : calculating acoustic with built-in function")
-        # timing.full から acoustic.csv を作る。
-        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=use_segment_label)
-    elif calculator == "built-in-world":
-        # timing.full から acoustic.csv を作る。
-        print(f"{datetime.now()} : calculating acoustic with built-in-world function")
         enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=use_segment_label)
         # acoustic のファイルから f0, spectrogram, aperiodicity のファイルを出力
         enulib.world.acoustic2world(config, path_full_timing, path_acoustic, path_f0, path_spectrogram, path_aperiodicity)
+    elif calculator == "built-in-vocoder":
+        print(f"{datetime.now()} : calculating acoustic with built-in-vocoder function")
+        # timing.full から acoustic.csv を作る。
+        enulib.acoustic.timing2acoustic(config, path_full_timing, path_acoustic, use_segment_label=use_segment_label)
     else:
         print(f"{datetime.now()} : calculating acoustic with {calculator}")
         enulib.extensions.run_extension(

@@ -13,7 +13,8 @@ import traceback
 
 import numpy as np
 import enulib
-from enulib import enu_logic
+import enu_logic
+
 try:
     import zmq
 except ModuleNotFoundError:

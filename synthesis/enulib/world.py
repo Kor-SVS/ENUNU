@@ -3,30 +3,27 @@
 """
 acousticのファイルをWAVファイルにするまでの処理を行う。
 """
-import os
 from typing import List
-import hydra
-import joblib
+import torch
 import numpy as np
 import pysptk
 import pyworld
-import torch
-from enulib.common import set_checkpoint, set_normalization_stat
 from hydra.utils import to_absolute_path
+from omegaconf import DictConfig, OmegaConf
+from scipy.io import wavfile
+
 from nnmnkwii.io import hts
 from nnmnkwii.postfilters import merlin_post_filter
+
 from nnsvs.dsp import bandpass_filter
 from nnsvs.gen import gen_spsvs_static_features, gen_world_params
 from nnsvs.logger import getLogger
 from nnsvs.multistream import get_static_stream_sizes
 from nnsvs.pitch import lowpass_filter
 from nnsvs.postfilters import variance_scaling
-from omegaconf import DictConfig, OmegaConf
-from scipy.io import wavfile
-
 from nnsvs.io.hts import segment_labels
 
-from enulib.common import get_device
+from enulib.common import set_checkpoint, set_normalization_stat, get_device
 from enulib.model_manager import get_global_model_manager
 
 logger = None
@@ -218,9 +215,10 @@ def get_acoustic_feature(
                 acoustic_model_config.has_dynamic_features,
                 acoustic_model_config.num_windows,
             )
+
             mgc_end_dim = static_stream_sizes[0]
             acoustic_features[:, :mgc_end_dim] = variance_scaling(
-                postfilter_out_scaler.var_.reshape(-1)[:mgc_end_dim],
+                postfilter_out_scaler.var_.reshape(-1)[:mgc_end_dim],  # type: ignore
                 acoustic_features[:, :mgc_end_dim],
                 offset=2,
             )
@@ -228,7 +226,7 @@ def get_acoustic_feature(
             bap_start_dim = sum(static_stream_sizes[:3])
             bap_end_dim = sum(static_stream_sizes[:4])
             acoustic_features[:, bap_start_dim:bap_end_dim] = variance_scaling(
-                postfilter_out_scaler.var_.reshape(-1)[bap_start_dim:bap_end_dim],
+                postfilter_out_scaler.var_.reshape(-1)[bap_start_dim:bap_end_dim],  # type: ignore
                 acoustic_features[:, bap_start_dim:bap_end_dim],
                 offset=0,
             )
@@ -237,7 +235,7 @@ def get_acoustic_feature(
             if post_filter_type == "nnsvs":
                 print("Apply mgc_postfilter")
                 in_feats = torch.from_numpy(acoustic_features).float().unsqueeze(0)
-                in_feats = postfilter_out_scaler.transform(in_feats).float().to(device)
+                in_feats = postfilter_out_scaler.transform(in_feats).float().to(device)  # type: ignore
                 out_feats = postfilter_model.inference(in_feats, [in_feats.shape[1]])
                 acoustic_features = postfilter_out_scaler.inverse_transform(out_feats.detach().cpu()).squeeze(0).numpy()
         except Exception as e:
@@ -309,7 +307,7 @@ def world2wav(config: DictConfig, path_f0, path_spectrogram, path_aperiodicity, 
     f0 = np.loadtxt(path_f0, delimiter=",", dtype=np.float64)
     spectrogram = np.loadtxt(path_spectrogram, delimiter=",", dtype=np.float64)
     aperiodicity = np.loadtxt(path_aperiodicity, delimiter=",", dtype=np.float64)
-    wav = pyworld.synthesize(f0, spectrogram, aperiodicity, config.sample_rate, config.frame_period)
+    wav = pyworld.synthesize(f0, spectrogram, aperiodicity, config.sample_rate, config.frame_period)  # type: ignore
 
     wav = bandpass_filter(wav, config.sample_rate)
 
@@ -368,20 +366,6 @@ def acoustic2vocoder_wav(
 
                 wavs.append(wav)
                 print(f"infer: {start_time} ~ {end_time}")
-
-                # ############################################################################
-                # # post-processing
-                # wav_t = bandpass_filter(wav, model_config.sampling_rate)
-
-                # if np.max(wav_t) > 10:
-                #     # data is likely already in [-32768, 32767]
-                #     wav_t = wav_t.astype(np.int16)
-                # else:
-                #     wav_t = np.clip(wav_t, -1.0, 1.0)
-                #     wav_t = (wav_t * 32767.0).astype(np.int16)
-
-                # generate_wav_file(config, wav_t, os.path.splitext(path_wav)[0] + f"_{str(idx).zfill(3)}.wav")
-                # ############################################################################
 
         # Concatenate segmented wavs
         wav = np.concatenate(wavs, axis=0).reshape(-1)

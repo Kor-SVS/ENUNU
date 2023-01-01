@@ -15,6 +15,7 @@ from omegaconf import DictConfig
 
 
 def get_device():
+    # return "cpu"
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
