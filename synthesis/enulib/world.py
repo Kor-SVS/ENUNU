@@ -16,7 +16,7 @@ from nnmnkwii.io import hts
 from nnmnkwii.postfilters import merlin_post_filter
 
 from nnsvs.dsp import bandpass_filter
-from nnsvs.gen import gen_spsvs_static_features, gen_world_params
+from nnsvs.gen import gen_spsvs_static_features, gen_world_params, postprocess_acoustic, predict_waveform, postprocess_waveform
 from nnsvs.logger import getLogger
 from nnsvs.multistream import get_static_stream_sizes
 from nnsvs.pitch import lowpass_filter
@@ -146,6 +146,7 @@ def get_acoustic_feature(
     path_acoustic,
     trajectory_smoothing=True,
     trajectory_smoothing_cutoff=50,
+    trajectory_smoothing_cutoff_f0=20,
     vibrato_scale=1.0,
     vuv_threshold=0.1,
 ):
@@ -153,6 +154,9 @@ def get_acoustic_feature(
     global logger  # pylint: disable=global-statement
     logger = getLogger(config.verbose)
     logger.info(OmegaConf.to_yaml(config))
+
+    device = get_device()
+    post_filter_type = "gv"
 
     # load labels and question
     duration_modified_labels = hts.load(path_timing).round_()
@@ -166,7 +170,12 @@ def get_acoustic_feature(
     # --------------------------------------
 
     model_manager = get_global_model_manager()
-    acoustic_model_config = model_manager.load_config("acoustic", config)
+    acoustic_model_config, model, in_scaler, acoustic_out_static_scaler = get_global_model_manager().get_acoustic_model(config, device)
+    postfilter_config, postfilter_model, postfilter_out_scaler = None, None, None
+    # postfilter_config, postfilter_model, postfilter_out_scaler = get_global_model_manager().get_post_filter_model(
+    #     config,
+    #     device,
+    #     post_filter_type,)
 
     # hedファイルを辞書として読み取る。
     binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
@@ -179,101 +188,30 @@ def get_acoustic_feature(
     # Acousticの数値を読み取る
     acoustic_features = np.loadtxt(path_acoustic, delimiter=",", dtype=np.float64)
 
-    # postfilter setting
-    try:
-        # substitute of maybe_set_checkpoints_(config)
-        set_checkpoint(config, "postfilter")
-        # substitute of maybe_set_normalization_stats_(config)
-        set_normalization_stat(config, "postfilter")
-    except Exception as e:
-        print(e)
-        print(f"There is no post_filter_type setting so merlin is used.")
-
-    try:
-        post_filter_type = str(config.acoustic.post_filter_type).lower()
-    except Exception as e:
-        print(e)
-        print(f"There is no post_filter_type setting so merlin is used.")
-        post_filter_type = "merlin"
-
-    if post_filter_type not in ["merlin", "nnsvs", "gv", "none"]:
-        print(f"Unknown post-filter type: {post_filter_type} so merlin is used.")
-        post_filter_type = "merlin"
-
-    if "post_filter" in config.acoustic.keys():
-        print("post_filter is deprecated. Use post_filter_type instead.")
-
-    if post_filter_type in ["nnsvs", "gv"]:
-        try:
-            device = get_device()
-            model_config, postfilter_model, postfilter_out_scaler = model_manager.get_post_filter_model(config, device, post_filter_type)
-
-            # Apply GV post-filtering
-            print("Apply GV post-filtering")
-            static_stream_sizes = get_static_stream_sizes(
-                acoustic_model_config.stream_sizes,
-                acoustic_model_config.has_dynamic_features,
-                acoustic_model_config.num_windows,
-            )
-
-            mgc_end_dim = static_stream_sizes[0]
-            acoustic_features[:, :mgc_end_dim] = variance_scaling(
-                postfilter_out_scaler.var_.reshape(-1)[:mgc_end_dim],  # type: ignore
-                acoustic_features[:, :mgc_end_dim],
-                offset=2,
-            )
-            # bap
-            bap_start_dim = sum(static_stream_sizes[:3])
-            bap_end_dim = sum(static_stream_sizes[:4])
-            acoustic_features[:, bap_start_dim:bap_end_dim] = variance_scaling(
-                postfilter_out_scaler.var_.reshape(-1)[bap_start_dim:bap_end_dim],  # type: ignore
-                acoustic_features[:, bap_start_dim:bap_end_dim],
-                offset=0,
-            )
-
-            # Learned post-filter using nnsvs
-            if post_filter_type == "nnsvs":
-                print("Apply mgc_postfilter")
-                in_feats = torch.from_numpy(acoustic_features).float().unsqueeze(0)
-                in_feats = postfilter_out_scaler.transform(in_feats).float().to(device)  # type: ignore
-                out_feats = postfilter_model.inference(in_feats, [in_feats.shape[1]])
-                acoustic_features = postfilter_out_scaler.inverse_transform(out_feats.detach().cpu()).squeeze(0).numpy()
-        except Exception as e:
-            print(e)
-            print("Unable to use NNSVS/GV postfilter")
-
-    # Generate static features from acoustic features
-    mgc, lf0, vuv, bap = gen_spsvs_static_features(
-        duration_modified_labels,
-        acoustic_features,
-        binary_dict,
-        numeric_dict,
-        acoustic_model_config.stream_sizes,
-        acoustic_model_config.has_dynamic_features,
-        config.acoustic.subphone_features,
-        pitch_idx,
-        acoustic_model_config.num_windows,
-        config.frame_period,
-        config.acoustic.relative_f0,
-        vibrato_scale,
-        vuv_threshold,
+    multistream_features = postprocess_acoustic(
+        device=device,
+        duration_modified_labels=duration_modified_labels,
+        acoustic_features=acoustic_features,
+        binary_dict=binary_dict,
+        numeric_dict=numeric_dict,
+        acoustic_config=acoustic_model_config,
+        acoustic_out_static_scaler=acoustic_out_static_scaler,
+        postfilter_model=postfilter_model,
+        postfilter_config=postfilter_config,
+        postfilter_out_scaler=postfilter_out_scaler,
+        sample_rate=config.sample_rate,
+        frame_period=config.frame_period,
+        relative_f0=config.acoustic.relative_f0,
+        feature_type="world",
+        post_filter_type=post_filter_type,
+        trajectory_smoothing=trajectory_smoothing,
+        trajectory_smoothing_cutoff=trajectory_smoothing_cutoff,
+        trajectory_smoothing_cutoff_f0=trajectory_smoothing_cutoff_f0,
+        vuv_threshold=vuv_threshold,
+        vibrato_scale=vibrato_scale,  # only valid for Sinsy-like models
     )
 
-    # NOTE: spectral enhancement based on the Merlin's post-filter implementation
-    if post_filter_type == "merlin":
-        alpha = pysptk.util.mcepalpha(config.sample_rate)
-        mgc = merlin_post_filter(mgc, alpha)
-
-    # Remove high-frequency components of mgc/bap
-    # NOTE: It seems to be effective to suppress artifacts of GAN-based post-filtering
-    if trajectory_smoothing:
-        modfs = int(1 / 0.005)
-        for d in range(mgc.shape[1]):
-            mgc[:, d] = lowpass_filter(mgc[:, d], modfs, cutoff=trajectory_smoothing_cutoff)
-        for d in range(bap.shape[1]):
-            bap[:, d] = lowpass_filter(bap[:, d], modfs, cutoff=trajectory_smoothing_cutoff)
-
-    return mgc, lf0, vuv, bap
+    return multistream_features
 
 
 def acoustic2world(
@@ -285,6 +223,7 @@ def acoustic2world(
     path_aperiodicity,
     trajectory_smoothing=True,
     trajectory_smoothing_cutoff=50,
+    trajectory_smoothing_cutoff_f0=20,
     vibrato_scale=1.0,
     vuv_threshold=0.1,
 ):
@@ -292,24 +231,48 @@ def acoustic2world(
     Acousticの行列のCSVを読んで、WAVファイルとして出力する。
     """
 
-    mgc, lf0, vuv, bap = get_acoustic_feature(config, path_timing, path_acoustic, trajectory_smoothing, trajectory_smoothing_cutoff, vibrato_scale, vuv_threshold)
+    mgc, lf0, vuv, bap = get_acoustic_feature(
+        config, path_timing, path_acoustic, trajectory_smoothing, trajectory_smoothing_cutoff, trajectory_smoothing_cutoff_f0, vibrato_scale, vuv_threshold)
 
     # Generate WORLD parameters
-    f0, spectrogram, aperiodicity = gen_world_params(mgc, lf0, vuv, bap, config.sample_rate, vuv_threshold=vuv_threshold)
+    f0, spectrogram, aperiodicity = gen_world_params(
+        mgc, lf0, vuv, bap, config.sample_rate, vuv_threshold=vuv_threshold, use_world_codec=config.use_world_codec)
 
     # csvファイルとしてf0の行列を出力
     for path, array in ((path_f0, f0), (path_spcetrogram, spectrogram), (path_aperiodicity, aperiodicity)):
         np.savetxt(path, array, fmt="%.16f", delimiter=",")
 
 
-def world2wav(config: DictConfig, path_f0, path_spectrogram, path_aperiodicity, path_wav):
+def world2wav(
+    config: DictConfig,
+    path_f0,
+    path_spectrogram,
+    path_aperiodicity,
+    path_wav,
+    vuv_threshold=0.1,
+):
     """WORLD用のパラメータからWAVファイルを生成する。"""
     f0 = np.loadtxt(path_f0, delimiter=",", dtype=np.float64)
     spectrogram = np.loadtxt(path_spectrogram, delimiter=",", dtype=np.float64)
     aperiodicity = np.loadtxt(path_aperiodicity, delimiter=",", dtype=np.float64)
-    wav = pyworld.synthesize(f0, spectrogram, aperiodicity, config.sample_rate, config.frame_period)  # type: ignore
 
-    wav = bandpass_filter(wav, config.sample_rate)
+    spectrogram[spectrogram == 0] = 1e-16  # 0.0000000000000001
+
+    wav = predict_waveform(
+        device="cpu",
+        multistream_features=(f0, spectrogram, aperiodicity),
+        feature_type="world_org",
+        sample_rate=config.sample_rate,
+        frame_period=config.frame_period,
+        use_world_codec=config.get("use_world_codec", False),
+        vuv_threshold=vuv_threshold,
+    )
+
+    wav = postprocess_waveform(
+        wav=wav,
+        dtype=wav.dtype,
+        sample_rate=config.sample_rate,
+    )
 
     # 音量を調整して 32bit float でファイル出力
     generate_wav_file(config, wav, path_wav)
@@ -322,6 +285,7 @@ def acoustic2vocoder_wav(
     path_wav,
     trajectory_smoothing=True,
     trajectory_smoothing_cutoff=50,
+    trajectory_smoothing_cutoff_f0=20,
     vibrato_scale=1.0,
     vuv_threshold=0.1,
     use_segment_label=False,
@@ -330,7 +294,8 @@ def acoustic2vocoder_wav(
 
     duration_modified_labels = hts.load(path_timing).round_()
 
-    mgc, lf0, vuv, bap = get_acoustic_feature(config, path_timing, path_acoustic, trajectory_smoothing, trajectory_smoothing_cutoff, vibrato_scale, vuv_threshold)
+    mgc, lf0, vuv, bap = get_acoustic_feature(
+        config, path_timing, path_acoustic, trajectory_smoothing, trajectory_smoothing_cutoff, trajectory_smoothing_cutoff_f0, vibrato_scale, vuv_threshold)
 
     model_config, model, in_scaler = get_global_model_manager().get_vocoder_model(config, device)
 

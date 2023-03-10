@@ -109,6 +109,7 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path, use_segment_
                 config.acoustic.subphone_features,
                 pitch_indices,
                 config.log_f0_conditioning,
+                force_clip_input_features,
             )
             acoustic_features_list.append(acoustic_features)
 
@@ -127,6 +128,7 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path, use_segment_
             config.acoustic.subphone_features,
             pitch_indices,
             config.log_f0_conditioning,
+            force_clip_input_features,
         )
 
     # csvファイルとしてAcousticの行列を出力
