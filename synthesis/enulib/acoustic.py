@@ -37,7 +37,7 @@ from nnsvs.gen import predict_acoustic
 from nnsvs.logger import getLogger
 from omegaconf import DictConfig, OmegaConf
 
-from nnsvs.io.hts import segment_labels
+from nnsvs.io.hts import segment_labels, get_pitch_index, get_pitch_indices
 
 from enulib.common import get_device
 from enulib.model_manager import get_global_model_manager
@@ -79,10 +79,10 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path, use_segment_
     #     config[typ].question_path = config.question_path
     # --------------------------------------
     # hedファイルを辞書として読み取る。
-    binary_dict, continuous_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
+    binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
     # pitch indices in the input features
-    # pitch_idx = len(binary_dict) + 1
-    pitch_indices = np.arange(len(binary_dict), len(binary_dict) + 3)
+    # pitch_idx = get_pitch_index(binary_dict, numeric_dict)
+    pitch_indices = get_pitch_indices(binary_dict, numeric_dict)
 
     # check force_clip_input_features (for backward compatibility)
     force_clip_input_features = True
@@ -105,7 +105,7 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path, use_segment_
                 in_scaler,
                 out_scaler,
                 binary_dict,
-                continuous_dict,
+                numeric_dict,
                 config.acoustic.subphone_features,
                 pitch_indices,
                 config.log_f0_conditioning,
@@ -123,7 +123,7 @@ def timing2acoustic(config: DictConfig, timing_path, acoustic_path, use_segment_
             in_scaler,
             out_scaler,
             binary_dict,
-            continuous_dict,
+            numeric_dict,
             config.acoustic.subphone_features,
             pitch_indices,
             config.log_f0_conditioning,

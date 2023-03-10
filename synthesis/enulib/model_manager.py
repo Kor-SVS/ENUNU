@@ -43,11 +43,6 @@ except ImportError:
     _pwg_available = False
 
 
-def get_global_model_manager():
-    global __GLOBAL_MODEL_MANAGER
-    return __GLOBAL_MODEL_MANAGER
-
-
 class ModelManager(object):
     def __init__(self):
         self.model_dict = {}
@@ -141,3 +136,8 @@ class ModelManager(object):
 
 
 __GLOBAL_MODEL_MANAGER = ModelManager()
+
+
+def get_global_model_manager():
+    global __GLOBAL_MODEL_MANAGER
+    return __GLOBAL_MODEL_MANAGER

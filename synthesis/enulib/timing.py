@@ -11,6 +11,7 @@ from hydra.utils import to_absolute_path
 from nnmnkwii.io import hts
 from nnsvs.gen import postprocess_duration, predict_duration, predict_timelag
 from nnsvs.logger import getLogger
+from nnsvs.io.hts import get_pitch_index, get_pitch_indices
 from omegaconf import DictConfig, OmegaConf
 
 from enulib.common import get_device
@@ -53,10 +54,10 @@ def _score2timelag(config: DictConfig, labels):
     #     config[typ].question_path = config.question_path
     # --------------------------------------
     # hedファイルを辞書として読み取る。
-    binary_dict, continuous_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
+    binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
     # pitch indices in the input features
-    # pitch_idx = len(binary_dict) + 1
-    pitch_indices = np.arange(len(binary_dict), len(binary_dict) + 3)
+    # pitch_idx = get_pitch_index(binary_dict, numeric_dict)
+    pitch_indices = get_pitch_indices(binary_dict, numeric_dict)
 
     # check force_clip_input_features (for backward compatibility)
     force_clip_input_features = True
@@ -75,7 +76,7 @@ def _score2timelag(config: DictConfig, labels):
         in_scaler,
         out_scaler,
         binary_dict,
-        continuous_dict,
+        numeric_dict,
         pitch_indices,
         config.log_f0_conditioning,
         config.timelag.allowed_range,
@@ -129,8 +130,8 @@ def _score2duration(config: DictConfig, labels):
     # hedファイルを辞書として読み取る。
     binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
     # pitch indices in the input features
-    # pitch_idx = len(binary_dict) + 1
-    pitch_indices = np.arange(len(binary_dict), len(binary_dict) + 3)
+    # pitch_idx = get_pitch_index(binary_dict, numeric_dict)
+    pitch_indices = get_pitch_indices(binary_dict, numeric_dict)
 
     # check force_clip_input_features (for backward compatibility)
     force_clip_input_features = True

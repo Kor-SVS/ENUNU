@@ -21,7 +21,7 @@ from nnsvs.logger import getLogger
 from nnsvs.multistream import get_static_stream_sizes
 from nnsvs.pitch import lowpass_filter
 from nnsvs.postfilters import variance_scaling
-from nnsvs.io.hts import segment_labels
+from nnsvs.io.hts import segment_labels, get_pitch_index, get_pitch_indices
 
 from enulib.common import set_checkpoint, set_normalization_stat, get_device
 from enulib.model_manager import get_global_model_manager
@@ -172,8 +172,8 @@ def get_acoustic_feature(
     binary_dict, numeric_dict = hts.load_question_set(question_path, append_hat_for_LL=False)
 
     # pitch indices in the input features
-    pitch_idx = len(binary_dict) + 1
-    # pitch_indices = np.arange(len(binary_dict), len(binary_dict)+3)
+    pitch_idx = get_pitch_index(binary_dict, numeric_dict)
+    # pitch_indices = get_pitch_indices(binary_dict, numeric_dict)
 
     # pylint: disable=no-member
     # Acousticの数値を読み取る
