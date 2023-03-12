@@ -256,8 +256,6 @@ def world2wav(
     spectrogram = np.loadtxt(path_spectrogram, delimiter=",", dtype=np.float64)
     aperiodicity = np.loadtxt(path_aperiodicity, delimiter=",", dtype=np.float64)
 
-    spectrogram[spectrogram == 0] = 1e-16  # 0.0000000000000001
-
     wav = predict_waveform(
         device="cpu",
         multistream_features=(f0, spectrogram, aperiodicity),
